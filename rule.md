@@ -66,7 +66,7 @@
 - `tw-transition-colors` kept only if needed for non-bg transitions; otherwise removed.
 
 ---
-Inner/Outer Visibility — Root → Leaf Fix (Two-Score, Existing Color Only)
+## 6. Inner/Outer Visibility — Root → Leaf Fix (Two-Score, Existing Color Only)
 
 │ Every component must be distinct from immediate parent and immediate children only. l1→l2→l3:
 │ l1==l3 allowed, l2 must differ from both. Similarity should be minimum (100=identical bad,

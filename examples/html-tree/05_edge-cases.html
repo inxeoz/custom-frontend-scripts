@@ -1,0 +1,15 @@
+<!-- 05_edge-cases.html — id / class / data-component priority, hidden tags, truncation -->
+<div data-component="priority-test" id="should-be-ignored" class="also-ignored">data-component wins</div>
+<div id="id-wins" class="class-ignored">id wins over class</div>
+<div class="first-class second-class">first class token wins</div>
+<div>bare div → tag name "div"</div>
+
+<div id="container-with-hidden">
+  <script>should be skipped by default (use --include-hidden to show)</script>
+  <style>.hidden { display:none }</style>
+  <span>visible child</span>
+</div>
+
+<div>Long text should truncate at 80 chars: Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</div>
+
+<div data-testid="my-card">data-testid as name fallback (4th priority)</div>

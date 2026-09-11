@@ -1,0 +1,23 @@
+<!-- 08_edge-cases.html — edge cases that SHOULD pass -->
+<!-- single quotes -->
+<button data-testid='08_edge-cases:btn-single-quote'>Single Quote</button>
+
+<!-- dynamic [attr.data-testid] counts as present (no missing error) -->
+<button [attr.data-testid]="'08_edge-cases:btn-dynamic'">Dynamic</button>
+
+<!-- href exempt + with data-testid (no Convention check since prefix different) -->
+<a href="https://example.com" data-testid="other:link-external">External with id</a>
+<a href="tel:+1234567890">Phone (exempt)</a>
+
+<!-- role=button on div is interactive → needs id, so we add it -->
+<div role="button" data-testid="08_edge-cases:btn-div-button">Div Button</div>
+
+<!-- comment with fake tag should be skipped -->
+<!-- <button>Fake inside comment</button> -->
+<button data-testid="08_edge-cases:btn-real">Real</button>
+
+<!-- attribute with > inside quotes — id matches text -->
+<button data-testid="08_edge-cases:btn-has-title-with" title="a > b">Has title with</button>
+
+<!-- void element input with placeholder: convention uses placeholder when no innerText -->
+<input data-testid="08_edge-cases:input-email" placeholder="Email Address" />

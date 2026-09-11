@@ -1,0 +1,8 @@
+<!-- 03_missing-container.html — should WARN (strict fails): containers without data-testid -->
+<section>Profile without id</section>
+<nav>Nav without id</nav>
+<table><tr><td>Table without id</td></tr></table>
+<dialog>Dialog without id</dialog>
+
+<!-- with id — no warning -->
+<section data-testid="03_missing-container:section-ok">OK</section>

@@ -1,0 +1,19 @@
+<!-- 01_valid.html — should PASS: all interactive + containers have correct data-testid -->
+<button data-testid="01_valid:btn-save">Save</button>
+<input data-testid="01_valid:input-email" placeholder="Email" />
+<select data-testid="01_valid:select-country"><option>India</option></select>
+<textarea data-testid="01_valid:textarea-notes" placeholder="Notes"></textarea>
+
+<section data-testid="01_valid:section-profile">
+  <nav data-testid="01_valid:nav-main"></nav>
+  <table data-testid="01_valid:table-users"></table>
+</section>
+
+<!-- link with visible text — btn scope derives from text -->
+<a data-testid="01_valid:link-view-details">View Details</a>
+<button data-testid="01_valid:btn-cancel">Cancel</button>
+
+<!-- external links are exempt — no testid needed -->
+<a href="https://example.com">External</a>
+<a href="mailto:test@example.com">Email us</a>
+<a href="#anchor">Jump</a>

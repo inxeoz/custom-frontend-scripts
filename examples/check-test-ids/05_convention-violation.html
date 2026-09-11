@@ -1,0 +1,17 @@
+<!-- 05_convention-violation.html — naming convention: desc must match visible text -->
+<!-- filename prefix is 05_convention-violation, scope must be in TEXT_DERIVED_SCOPES -->
+
+<!-- BAD: text is "Save Changes" but id says btn-wrong-name -->
+<button data-testid="05_convention-violation:btn-wrong-name">Save Changes</button>
+
+<!-- BAD: text is "Cancel Order" but id says btn-ok -->
+<button data-testid="05_convention-violation:btn-ok">Cancel Order</button>
+
+<!-- GOOD: matches kebab of text -->
+<button data-testid="05_convention-violation:btn-save-changes">Save Changes</button>
+
+<!-- th scope derived from inner text -->
+<table>
+  <tr><th data-testid="05_convention-violation:th-name">Name</th></tr>
+  <tr><th data-testid="05_convention-violation:th-bad-desc">Name</th></tr>
+</table>

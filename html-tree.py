@@ -33,19 +33,17 @@ Name resolution (first match wins):
   3. first class token
   4. tag name
 
-Color resolution (auto):
+Color resolution (explicit only — no fallback):
   1. data-color attribute
   2. inline style background-color / background / color (hex or rgb)
   3. tw-bg-* Tailwind class (mapped via TW_BG_MAP)
-  4. deterministic hash color derived from name (so every node has a color)
+  4. otherwise → [no-color] (no fallback)
 
 Text nodes inherit parent color.
-Override with --color-mode {auto,style,hash}
 """
 from __future__ import annotations
 
 import argparse
-import hashlib
 import re
 import sys
 from pathlib import Path
@@ -103,33 +101,6 @@ def extract_color_from_style(style: str):
         return rgb_to_hex(*rgb_m.groups())
     return None
 
-def hash_color(name: str) -> str:
-    h = int(hashlib.md5(name.encode()).hexdigest()[:8], 16) % 360
-    s = 60
-    l = 28 + (int(hashlib.md5((name+"s").encode()).hexdigest()[:2], 16) % 12)
-    return hsl_to_hex(h, s, l)
-
-def hsl_to_hex(h, s, l):
-    s /= 100
-    l /= 100
-    c = (1 - abs(2*l - 1)) * s
-    x = c * (1 - abs((h/60) % 2 - 1))
-    m = l - c/2
-    if h < 60:
-        r, g, b = c, x, 0
-    elif h < 120:
-        r, g, b = x, c, 0
-    elif h < 180:
-        r, g, b = 0, c, x
-    elif h < 240:
-        r, g, b = 0, x, c
-    elif h < 300:
-        r, g, b = x, 0, c
-    else:
-        r, g, b = c, 0, x
-    r, g, b = (r+m)*255, (g+m)*255, (b+m)*255
-    return rgb_to_hex(r, g, b)
-
 def hex_to_rgb(h):
     h = h.lstrip("#")
     if len(h) == 3:
@@ -137,6 +108,8 @@ def hex_to_rgb(h):
     return int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
 
 def similarity_score(hex1, hex2):
+    if not hex1 or not hex2:
+        return None
     try:
         r1,g1,b1 = hex_to_rgb(hex1)
         r2,g2,b2 = hex_to_rgb(hex2)
@@ -145,7 +118,7 @@ def similarity_score(hex1, hex2):
         sim = 100 * (1 - d / max_d)
         return int(round(max(0, min(100, sim))))
     except Exception:
-        return 0
+        return None
 
 def node_name(el):
     for attr in ("data-component", "data-component-id", "data-id", "data-testid"):
@@ -163,29 +136,27 @@ def node_name(el):
     return el.name.lower()
 
 def node_color(el, name, mode="auto"):
-    if mode in ("auto","style"):
-        if el.has_attr("data-color"):
-            v = str(el["data-color"]).strip()
-            if HEX_RE.search(v): return HEX_RE.search(v).group(0).upper()[:7]
-            if RGB_RE.search(v):
-                m=RGB_RE.search(v); return rgb_to_hex(*m.groups())
-            if v.startswith("#"): return v[:7].upper()
-        if el.has_attr("style"):
-            c = extract_color_from_style(el["style"])
+    # explicit only — no fallback, no fake data
+    if el.has_attr("data-color"):
+        v = str(el["data-color"]).strip()
+        if HEX_RE.search(v): return HEX_RE.search(v).group(0).upper()[:7]
+        if RGB_RE.search(v):
+            m=RGB_RE.search(v); return rgb_to_hex(*m.groups())
+        if v.startswith("#"): return v[:7].upper()
+    if el.has_attr("style"):
+        c = extract_color_from_style(el["style"])
+        if c: return c
+    # tw-bg tailwind fallback (auto only)
+    if mode == "auto" and el.has_attr("class"):
+        for cls in el["class"]:
+            if cls in TW_BG_MAP:
+                return TW_BG_MAP[cls]
+    for a in ("data-bg","data-background","data-theme-color"):
+        if el.has_attr(a):
+            c = extract_color_from_style(str(el[a]))
             if c: return c
-        # tw-bg tailwind fallback
-        if el.has_attr("class") and mode == "auto":
-            for cls in el["class"]:
-                if cls in TW_BG_MAP:
-                    return TW_BG_MAP[cls]
-        for a in ("data-bg","data-background","data-theme-color"):
-            if el.has_attr(a):
-                c = extract_color_from_style(str(el[a]))
-                if c: return c
-                if HEX_RE.search(str(el[a])): return HEX_RE.search(str(el[a])).group(0).upper()[:7]
-        if mode == "style":
-            return "#64748B"
-    return hash_color(name + "|" + el.name)
+            if HEX_RE.search(str(el[a])): return HEX_RE.search(str(el[a])).group(0).upper()[:7]
+    return None
 
 SKIP_TAGS = {"script","style","meta","link","title","noscript"}
 
@@ -224,10 +195,10 @@ def build_lines(root, color_mode="auto", skip_hidden=True, include_text=True, sh
     else:
         has_children = any(True for _ in children_of(root, skip_hidden))
     suffix = "/" if has_children else ""
-    # compute C = avg similarity to immediate element children
+    # compute C = avg similarity to immediate element children (None if no color)
     c_score = None
     if show_similarity:
-        child_colors = []
+        child_scores = []
         # collect immediate element children colors
         if include_text:
             kids_for_c = [c for kind,c in mixed_children(root, True, skip_hidden) if kind=="tag"]
@@ -236,20 +207,27 @@ def build_lines(root, color_mode="auto", skip_hidden=True, include_text=True, sh
         for ch in kids_for_c:
             ch_name = node_name(ch)
             ch_color = node_color(ch, ch_name, color_mode)
-            child_colors.append(similarity_score(color, ch_color))
-        if child_colors:
-            c_score = int(round(sum(child_colors)/len(child_colors)))
+            s = similarity_score(color, ch_color)
+            if s is not None:
+                child_scores.append(s)
+        if child_scores:
+            c_score = int(round(sum(child_scores)/len(child_scores)))
+        elif color is None:
+            c_score = None
         else:
-            c_score = 0
+            c_score = 0 if any(node_color(c, node_name(c), color_mode) is not None for c in kids_for_c) else None
     if show_similarity:
+        color_part = color if color else "no-color"
+        c_str = f"C-{c_score}" if c_score is not None else "C--"
         if is_root:
-            # root has no parent, show P-0
-            line = f"{name}[{color}/P-0/C-{c_score}]{suffix}"
+            line = f"{name}[{color_part}/P--/{c_str}]{suffix}"
         else:
-            p_score = similarity_score(parent_color, color) if parent_color else 0
-            line = f"{name}[{color}/P-{p_score}/C-{c_score}]{suffix}"
+            p_score = similarity_score(parent_color, color)
+            p_str = f"P-{p_score}" if p_score is not None else "P--"
+            c_str2 = f"C-{c_score}" if c_score is not None else "C--"
+            line = f"{name}[{color_part}/{p_str}/{c_str2}]{suffix}"
     else:
-        line = f"{name}[{color}]{suffix}"
+        line = f"{name}[{color}]{suffix}" if color else f"{name}{suffix}"
     if is_root:
         lines = [line]
     else:
@@ -266,13 +244,14 @@ def build_lines(root, color_mode="auto", skip_hidden=True, include_text=True, sh
         if kind == "tag":
             lines.extend(build_lines(kid, color_mode, skip_hidden, include_text, show_similarity, color, prefix, last, False))
         else:
-            # text leaf
+            # text leaf — inherits parent color
             branch = "└── " if last else "├── "
             if show_similarity:
-                # text inherits parent color -> P=100, C=0 (leaf)
-                tline = f'"{kid}"[{color}/P-100/C-0]'
+                p_str = "P-100" if color else "P--"
+                c_part = color if color else "no-color"
+                tline = f'"{kid}"[{c_part}/{p_str}/C--]'
             else:
-                tline = f'"{kid}"[{color}]'
+                tline = f'"{kid}"[{color}]' if color else f'"{kid}"'
             lines.append(f"{prefix}{branch}{tline}")
     return lines
 
@@ -311,7 +290,7 @@ def main():
     ap.add_argument("html", nargs="?", help="HTML file path (or omit with --stdin)")
     ap.add_argument("-o","--output", help="Write tree to file instead of stdout")
     ap.add_argument("--stdin", action="store_true", help="Read HTML from stdin")
-    ap.add_argument("--color-mode", choices=["auto","style","hash"], default="auto", help="auto: style then hash, style: only inline style, hash: only hash")
+    ap.add_argument("--color-mode", choices=["auto","style"], default="auto", help="auto: style + tw-bg, style: only inline style (no fallback in either mode)")
     ap.add_argument("--include-hidden", action="store_true", help="Include script/style/meta tags")
     ap.add_argument("--root", dest="root_selector", help="CSS selector for subtree root (e.g. #app or .main)")
     ap.add_argument("--demo", action="store_true", help="Run demo on built-in sample and exit")

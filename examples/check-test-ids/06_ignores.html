@@ -1,0 +1,16 @@
+<!-- 06_ignores.html — all ignores should make this PASS despite missing ids -->
+
+<!-- file-level ignore example is in 07_file-ignore.html -->
+
+<!-- next-line ignore -->
+<!-- check-test-ids-ignore-next-line -->
+<button>Ignored button</button>
+
+<!-- element-level ignore -->
+<button data-testid-ignore>Also ignored</button>
+<div data-testid-ignore>Ignored container itself (children still checked, so inner needs id)</div>
+<button data-testid-ignore>Also ignored</button>
+<section data-testid-ignore>Ignored container</section>
+
+<!-- normal element still checked but we add id so it passes -->
+<button data-testid="06_ignores:btn-ok">OK</button>

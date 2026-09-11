@@ -1,0 +1,10 @@
+<!-- 02_colors.html — tests every color resolution path -->
+<div id="root" data-color="#0F172A">
+  <div class="html-container" style="background-color: #1E293B">Styled div</div>
+  <div class="tw-bg-slate-100">Tailwind mapped (tw-bg-slate-100 → #F1F5F9)</div>
+  <div class="tw-bg-emerald-50">Emerald 50 → #ECFDF5</div>
+  <div data-component="custom-card" style="background: rgb(220, 38, 38)">RGB color</div>
+  <div id="hash-only">No color attr → now [no-color] (no fallback)</div>
+  <div data-color="rgb(59, 130, 246)">Data-color as RGB</div>
+  <div style="color: #F59E0B">Color property fallback</div>
+</div>

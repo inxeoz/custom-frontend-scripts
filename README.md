@@ -20,6 +20,26 @@ pip install beautifulsoup4
 
 ---
 
+## Global install — the `cfs` binary
+
+Both scripts are reachable through one dispatcher, `bin/cfs`:
+
+```bash
+cfs lint [flags]         # → node check-test-id.js
+cfs tree [flags] <file>  # → python3 html-tree.py
+cfs help
+```
+
+Install globally (once):
+
+```bash
+ln -sf "$PWD/bin/cfs" ~/.local/bin/cfs   # ~/.local/bin must be on PATH
+```
+
+Then flags pass straight through, e.g. `cfs lint --src src --strict`, `cfs tree page.html --similarity-score`.
+
+---
+
 ## check-test-id.js — `data-testid` linter
 
 Ensures every interactive element is selectable in tests and every `data-testid` follows a consistent convention. Fails CI on real errors, warns on style issues.

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# cfs — custom-frontend-scripts dispatcher
+set -euo pipefail
+
+DIR=$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)
+
+usage() {
+  cat <<'EOF'
+cfs — lean frontend scripts
+
+Usage:
+  cfs lint [flags]        Lint HTML for data-testid issues  (check-test-id.js)
+  cfs tree [flags] <file> Render an HTML component tree     (html-tree.py)
+
+Examples:
+  cfs lint --src src --strict
+  cfs tree page.html --similarity-score
+  cfs tree --demo
+
+Run `cfs lint --help` / `cfs tree --help` for tool-specific flags.
+EOF
+}
+
+cmd=${1:-help}
+if [ $# -gt 0 ]; then shift; fi
+
+case "$cmd" in
+  lint) exec node "$DIR/check-test-id.js" "$@" ;;
+  tree) exec python3 "$DIR/html-tree.py" "$@" ;;
+  help|-h|--help) usage ;;
+  *) echo "cfs: unknown command '$cmd'" >&2; echo >&2; usage >&2; exit 2 ;;
+esac

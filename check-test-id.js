@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_SRC = path.resolve(process.cwd(), 'src');
+const IGNORED_DIRS = new Set(['node_modules','.git','dist','build','coverage','.next','.nuxt','.output','.svelte-kit','vendor','.cache','tmp']);
 const INTERACTIVE = ['button','input','select','textarea','form'];
 const CONTAINERS = ['table','nav','section','dialog','article','aside','header','footer','main'];
 const TEXT_DERIVED_SCOPES = ['btn','link','heading','th','label','option','tab','li','sort-column'];
@@ -15,17 +15,20 @@ const VOID_ELEMENTS = new Set(['input','img','br','hr','meta','link','area','bas
 
 // --- CLI ---
 function parseArgs(argv){
-  const a={src:DEFAULT_SRC, json:false, color:true, strict:false, excludes:[], help:false};
+  const a={src:null, explicitSrc:false, json:false, color:true, strict:false, excludes:[], help:false};
   for(let i=2;i<argv.length;i++){
     const v=argv[i];
     if(v==='--help'||v==='-h') a.help=true;
     else if(v==='--json') a.json=true;
     else if(v==='--no-color') a.color=false;
     else if(v==='--strict') a.strict=true;
-    else if(v==='--src'&&argv[i+1]) a.src=path.resolve(argv[++i]);
-    else if(v.startsWith('--src=')) a.src=path.resolve(v.slice(6));
+    else if(v==='--src'&&argv[i+1]){ a.src=path.resolve(argv[++i]); a.explicitSrc=true; }
+    else if(v.startsWith('--src=')){ a.src=path.resolve(v.slice(6)); a.explicitSrc=true; }
     else if(v==='--exclude'&&argv[i+1]) a.excludes.push(argv[++i]);
     else if(v.startsWith('--exclude=')) a.excludes.push(v.slice(10));
+    else if(!v.startsWith('-')){
+      if(!a.explicitSrc){ a.src=path.resolve(v); a.explicitSrc=true; }
+    }
   }
   if(process.env.NO_COLOR) a.color=false;
   if(!process.stdout.isTTY) a.color=false;
@@ -34,9 +37,9 @@ function parseArgs(argv){
 }
 function printHelp(){
   console.log(`
-Usage: node scripts/check-test-ids.js [options]
+Usage: node scripts/check-test-ids.js [options] [dir|file]
 Options:
-  --src <dir>        Source directory (default: src)
+  --src <dir>        Source directory (default: auto-find src or .)
   --json             Output JSON instead of pretty text (CI friendly)
   --no-color         Disable colors
   --strict           Fail on warnings & convention violations too
@@ -75,20 +78,42 @@ function extractInnerText(content, openEndPos, tagName){
   t=t.replace(/<!--[\s\S]*?-->/g,' ').replace(/<[^>]+>/g,' ').replace(/&[a-zA-Z0-9#]+;/g,' ');
   return t.replace(/\s+/g,' ').trim();
 }
-function collectHtmlFiles(srcDir, excludes, excludeRes){
+function collectHtmlFiles(srcDir, excludes, excludeRes, isExplicit){
   const files=[];
-  if(!fs.existsSync(srcDir)){ console.error(`src dir not found: ${srcDir}`); return files; }
+  let target = srcDir;
+  if (!target) {
+    const defaultSrc = path.resolve(process.cwd(), 'src');
+    target = fs.existsSync(defaultSrc) ? defaultSrc : process.cwd();
+  }
+  if (!fs.existsSync(target)){
+    if (isExplicit) console.error(`src dir not found: ${target}`);
+    return { files, target };
+  }
+  try {
+    const stat = fs.statSync(target);
+    if (stat.isFile()){
+      if (target.endsWith('.html') && path.basename(target) !== 'index.html'){
+        const rel = path.relative(process.cwd(), target);
+        if (!isExcluded(rel, target, excludeRes, excludes)) files.push(target);
+      }
+      return { files, target };
+    }
+  } catch { return { files, target }; }
+
   function walk(dir){
     let entries; try{entries=fs.readdirSync(dir,{withFileTypes:true});}catch{return;}
     for(const e of entries){
-      const full=path.join(dir,e.name), rel=path.relative(srcDir,full);
+      const full=path.join(dir,e.name), rel=path.relative(target,full);
       if(isExcluded(rel, full, excludeRes, excludes)) continue;
-      if(e.isDirectory()){ walk(full); continue; }
+      if(e.isDirectory()){
+        if(IGNORED_DIRS.has(e.name)) continue;
+        walk(full); continue;
+      }
       if(!e.name.endsWith('.html')||e.name==='index.html') continue;
       files.push(full);
     }
   }
-  walk(srcDir); return files;
+  walk(target); return { files, target };
 }
 function findTags(content){
   const res=[], len=content.length; let i=0, line=1;
@@ -200,9 +225,10 @@ function colorize(s, code, en){ return en?`\x1b[${code}m${s}\x1b[0m`:s; }
 function main(){
   const args=parseArgs(process.argv);
   if(args.help){ printHelp(); process.exit(0); }
-  const files=collectHtmlFiles(args.src, args.excludes, args.excludeRes);
+  const { files, target }=collectHtmlFiles(args.src, args.excludes, args.excludeRes, args.explicitSrc);
   const cache=new Map(files.map(f=>[f, fs.readFileSync(f,'utf-8')]));
-  const rel=f=>path.relative(args.src,f);
+  const baseDir = (args.explicitSrc && fs.existsSync(target) && fs.statSync(target).isFile()) ? process.cwd() : target;
+  const rel=f=>path.relative(baseDir,f);
   const allE=[], allW=[];
   for(const [f, c] of cache){ const {errors, warnings}=processFile(f,c); allE.push(...errors); allW.push(...warnings); }
   const {total, duplicates}=checkDuplicates(cache);

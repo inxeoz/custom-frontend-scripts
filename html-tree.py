@@ -166,12 +166,27 @@ def main():
         try: source=sys.stdin.read()
         except: pass
     if not source:
-        if not args.html: ap.print_help(); sys.exit(1)
-        p=Path(args.html)
-        if not p.exists(): print(f"File not found: {p}", file=sys.stderr); sys.exit(1)
+        def resolve_p(arg):
+            ig={'node_modules','.git','dist','build','coverage','.next','.nuxt','vendor'}
+            if arg:
+                p=Path(arg)
+                if p.is_file(): return p
+                if p.is_dir():
+                    if (p/"index.html").is_file(): return p/"index.html"
+                    for f in sorted(p.rglob("*.html")):
+                        if not any(x in ig for x in f.parts): return f
+                    print(f"No HTML files found in: {p}", file=sys.stderr); sys.exit(1)
+                print(f"File not found: {p}", file=sys.stderr); sys.exit(1)
+            for c in [Path("src/index.html"), Path("index.html")]:
+                if c.is_file(): return c
+            target = Path("src") if Path("src").is_dir() else Path(".")
+            for f in sorted(target.rglob("*.html")):
+                if not any(x in ig for x in f.parts): return f
+            return None
+        p=resolve_p(args.html)
+        if not p: ap.print_help(); sys.exit(1)
         source=p.read_text(encoding="utf-8", errors="ignore")
-    if not source or not source.strip():
-        if args.html: source=Path(args.html).read_text(encoding="utf-8", errors="ignore")
+    if not source or not source.strip(): pass
     out=render(source, root_sel=args.root_selector, show_sim=show_sim, verbose=args.verbose, color_mode=args.color_mode, include_text=include_text, skip_hidden=skip_hidden)
     if args.similarity_score:
         hdr=summary(out); m=re.search(r"overall:(\d+/100)",hdr); result=f"Overall similarity: {m.group(1) if m else '0/100'}"
